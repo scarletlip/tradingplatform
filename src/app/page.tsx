@@ -39,6 +39,21 @@ export default function Home() {
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setCurrentUserId(user.id);
+        } catch {}
+      }
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/categories')
@@ -67,10 +82,48 @@ export default function Home() {
     try {
       const res = await fetch(`/api/items/${id}`);
       const data = await res.json();
+
+      // Check if favorited
+      try {
+        const token = localStorage.getItem('token');
+        const favRes = await fetch('/api/favorites', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const favItems = await favRes.json();
+        setIsFavorite(favItems.some((fav: any) => fav.id === id));
+      } catch {
+        setIsFavorite(false);
+      }
+
       setDetailItem(data);
       setSelectedItemId(id);
     } catch {
       console.error('Failed to fetch item detail');
+    }
+  };
+
+  const handleFavorite = async (itemId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const res = await fetch(`/api/favorites/${itemId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ itemId }),
+      });
+
+      if (res.ok || res.status === 200) {
+        setIsFavorite(!isFavorite);
+      }
+    } catch {
+      console.error('Favorite toggle failed');
     }
   };
 
@@ -89,7 +142,11 @@ export default function Home() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
             </div>
           ) : (
-            <ItemGrid items={items} onItemSelect={handleItemSelect} />
+            <ItemGrid
+              items={items}
+              onItemSelect={handleItemSelect}
+              currentUserId={currentUserId ?? undefined}
+            />
           )}
         </div>
       </div>
@@ -100,6 +157,9 @@ export default function Home() {
           setSelectedItemId(null);
           setDetailItem(null);
         }}
+        currentUserId={currentUserId ?? undefined}
+        onFavorite={handleFavorite}
+        isFavorite={isFavorite}
       />
     </div>
   );

@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+
 interface Seller {
   id: number;
   username: string;
@@ -19,12 +23,16 @@ interface ItemDetailProps {
   } | null;
   isOpen: boolean;
   onClose: () => void;
+  currentUserId?: number;
+  onFavorite?: (itemId: number) => void;
+  isFavorite?: boolean;
 }
 
-export function ItemDetail({ item, isOpen, onClose }: ItemDetailProps) {
+export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, isFavorite }: ItemDetailProps) {
   if (!item || !isOpen) return null;
 
-  const images = item.images ? JSON.parse(item.images) : [];
+  const imageUrl = item.images || '';
+  const isOwner = currentUserId === item.seller.id;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -44,9 +52,9 @@ export function ItemDetail({ item, isOpen, onClose }: ItemDetailProps) {
         </div>
 
         <div className="p-6 space-y-4">
-          {images.length > 0 && (
+          {imageUrl && (
             <img
-              src={images[0]}
+              src={imageUrl}
               alt={item.title}
               className="w-full aspect-square object-cover rounded-lg"
             />
@@ -58,6 +66,11 @@ export function ItemDetail({ item, isOpen, onClose }: ItemDetailProps) {
               <span className="text-2xl font-bold text-primary-600">¥{item.price}</span>
             </div>
             <p className="text-sm text-gray-500 mt-1">分类: {item.category}</p>
+            {item.status !== 'ACTIVE' && (
+              <p className="text-sm text-gray-400 mt-1">
+                状态: {item.status === 'SOLD' ? '已售出' : '已下架'}
+              </p>
+            )}
           </div>
 
           {item.description && (
@@ -84,9 +97,24 @@ export function ItemDetail({ item, isOpen, onClose }: ItemDetailProps) {
                 )}
               </div>
             </div>
-            <button className="mt-3 w-full bg-primary-500 hover:bg-primary-600 text-white py-2 rounded-lg text-sm font-medium transition-colors">
-              联系卖家
-            </button>
+
+            <div className="flex gap-2 mt-3">
+              {!isOwner && onFavorite && (
+                <button
+                  onClick={() => onFavorite(item.id)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isFavorite
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {isFavorite ? '取消收藏' : '收藏'}
+                </button>
+              )}
+              {isOwner && (
+                <span className="text-sm text-gray-500 py-2">这是你发布的商品</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

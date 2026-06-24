@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+
 interface Seller {
   id: number;
   username: string;
@@ -17,16 +21,107 @@ interface ItemCardProps {
     seller: Seller;
   };
   onClick: (id: number) => void;
+  currentUserId?: number;
+  onStatusChange?: (itemId: number, status: string) => void;
+  onDelete?: (itemId: number) => void;
 }
 
-export function ItemCard({ item, onClick }: ItemCardProps) {
-  const imageUrl = item.images ? JSON.parse(item.images)[0] : '';
+export function ItemCard({ item, onClick, currentUserId, onStatusChange, onDelete }: ItemCardProps) {
+  const [showManage, setShowManage] = useState(false);
+  const isSeller = currentUserId === item.seller.id;
+
+  const imageUrl = item.images || '';
+
+  const statusBadge = () => {
+    switch (item.status) {
+      case 'SOLD':
+        return (
+          <span className="absolute top-2 right-2 bg-gray-500 text-white text-xs px-2 py-1 rounded">
+            已售出
+          </span>
+        );
+      case 'OFFLINE':
+        return (
+          <span className="absolute top-2 right-2 bg-gray-400 text-white text-xs px-2 py-1 rounded">
+            已下架
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const handleStatusToggle = (status: string) => {
+    if (onStatusChange) {
+      onStatusChange(item.id, status);
+    }
+    setShowManage(false);
+  };
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(item.id);
+    }
+    setShowManage(false);
+  };
 
   return (
     <div
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
-      onClick={() => onClick(item.id)}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer group relative"
+      onClick={() => !isSeller && onClick(item.id)}
     >
+      {statusBadge()}
+
+      {isSeller && (
+        <div className="absolute top-2 left-2 z-10">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowManage(!showManage); }}
+            className="bg-white/90 text-gray-600 hover:text-primary-500 text-xs px-2 py-1 rounded shadow-sm transition-colors"
+          >
+            管理
+          </button>
+        </div>
+      )}
+
+      {showManage && isSeller && (
+        <div
+          className="absolute top-10 left-2 z-20 bg-white rounded-lg shadow-lg border p-2 text-sm min-w-[120px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {item.status === 'ACTIVE' && (
+            <button
+              onClick={() => handleStatusToggle('OFFLINE')}
+              className="w-full text-left py-1.5 px-2 hover:bg-gray-50 rounded text-gray-700"
+            >
+              下架
+            </button>
+          )}
+          {item.status === 'OFFLINE' && (
+            <button
+              onClick={() => handleStatusToggle('ACTIVE')}
+              className="w-full text-left py-1.5 px-2 hover:bg-gray-50 rounded text-gray-700"
+            >
+              恢复上架
+            </button>
+          )}
+          {item.status === 'ACTIVE' && (
+            <button
+              onClick={() => handleStatusToggle('SOLD')}
+              className="w-full text-left py-1.5 px-2 hover:bg-gray-50 rounded text-gray-700"
+            >
+              标为已售
+            </button>
+          )}
+          <hr className="my-1" />
+          <button
+            onClick={handleDelete}
+            className="w-full text-left py-1.5 px-2 hover:bg-red-50 rounded text-red-600"
+          >
+            删除
+          </button>
+        </div>
+      )}
+
       <div className="aspect-square bg-gray-100 overflow-hidden">
         {imageUrl ? (
           <img
@@ -42,6 +137,7 @@ export function ItemCard({ item, onClick }: ItemCardProps) {
           </div>
         )}
       </div>
+
       <div className="p-4">
         <h3 className="text-gray-900 font-medium truncate mb-1">{item.title}</h3>
         <p className="text-primary-600 font-bold text-lg">¥{item.price}</p>

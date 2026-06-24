@@ -21,12 +21,9 @@ interface Item {
 interface ItemGridProps {
   items: Item[];
   onItemSelect: (id: number) => void;
-  currentUserId?: number;
-  onStatusChange?: (itemId: number, status: string) => void;
-  onDelete?: (itemId: number) => void;
 }
 
-export function ItemGrid({ items, onItemSelect, currentUserId, onStatusChange, onDelete }: ItemGridProps) {
+export function ItemGrid({ items, onItemSelect }: ItemGridProps) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -41,14 +38,7 @@ export function ItemGrid({ items, onItemSelect, currentUserId, onStatusChange, o
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {items.map((item) => (
-        <ItemCard
-          key={item.id}
-          item={item}
-          onClick={onItemSelect}
-          currentUserId={currentUserId}
-          onStatusChange={onStatusChange}
-          onDelete={onDelete}
-        />
+        <ItemCard key={item.id} item={item} onClick={onItemSelect} />
       ))}
     </div>
   );

@@ -83,14 +83,22 @@ export default function Home() {
       const res = await fetch(`/api/items/${id}`);
       const data = await res.json();
 
-      // Check if favorited
+      // Check if favorited — only when logged in
       try {
         const token = localStorage.getItem('token');
-        const favRes = await fetch('/api/favorites', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const favItems = await favRes.json();
-        setIsFavorite(favItems.some((fav: any) => fav.id === id));
+        if (token) {
+          const favRes = await fetch('/api/favorites', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (favRes.ok) {
+            const favItems = await favRes.json();
+            setIsFavorite(favItems.some((fav: any) => fav.id === id));
+          } else {
+            setIsFavorite(false);
+          }
+        } else {
+          setIsFavorite(false);
+        }
       } catch {
         setIsFavorite(false);
       }
@@ -127,6 +135,50 @@ export default function Home() {
     }
   };
 
+  const handleStatusChange = async (itemId: number, newStatus: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/items/${itemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (res.ok) {
+        // Refresh item detail
+        if (selectedItemId === itemId && detailItem) {
+          const updated = { ...detailItem, status: newStatus };
+          setDetailItem(updated);
+          // Update items list
+          setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, status: newStatus } : item));
+        }
+      }
+    } catch {
+      alert('操作失败');
+    }
+  };
+
+  const handleDeleteItem = async (itemId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/items/${itemId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setDetailItem(null);
+        setSelectedItemId(null);
+        setItems((prev) => prev.filter((item) => item.id !== itemId));
+      }
+    } catch {
+      alert('删除失败');
+    }
+  };
+
   return (
     <div>
       <Hero />
@@ -142,11 +194,7 @@ export default function Home() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
             </div>
           ) : (
-            <ItemGrid
-              items={items}
-              onItemSelect={handleItemSelect}
-              currentUserId={currentUserId ?? undefined}
-            />
+            <ItemGrid items={items} onItemSelect={handleItemSelect} />
           )}
         </div>
       </div>
@@ -160,6 +208,8 @@ export default function Home() {
         currentUserId={currentUserId ?? undefined}
         onFavorite={handleFavorite}
         isFavorite={isFavorite}
+        onStatusChange={handleStatusChange}
+        onDelete={handleDeleteItem}
       />
     </div>
   );

@@ -198,6 +198,8 @@ export default function ProfilePage() {
           setSelectedItemId(null);
           setDetailItem(null);
         }}
+        onStatusChange={handleStatusChange}
+        onDelete={handleDeleteItem}
       />
     </div>
   );

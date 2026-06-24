@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Navbar } from '@/components/Navbar';
 import { ItemGrid } from '@/components/ItemGrid';
 import { ItemDetail } from '@/components/ItemDetail';
 
@@ -25,7 +24,7 @@ interface Item {
   seller: Seller;
 }
 
-export default function SearchPage() {
+function SearchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
@@ -36,13 +35,13 @@ export default function SearchPage() {
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
 
-  const search = () => {
+  const doSearch = () => {
     if (!query.trim()) return;
     router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') search();
+    if (e.key === 'Enter') doSearch();
   };
 
   useEffect(() => {
@@ -87,7 +86,7 @@ export default function SearchPage() {
           placeholder="搜索商品标题或描述..."
         />
         <button
-          onClick={search}
+          onClick={doSearch}
           className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
         >
           搜索
@@ -117,5 +116,13 @@ export default function SearchPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense>
+      <SearchPageInner />
+    </Suspense>
   );
 }

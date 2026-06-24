@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { AuthContext } from '@/contexts/AuthContext';
 
 export function Navbar() {
   const router = useRouter();
+  const { lastSync, sync } = useContext(AuthContext);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
+  const syncAuth = () => {
     const token = localStorage.getItem('token');
     if (token) {
       const userStr = localStorage.getItem('user');
@@ -22,9 +24,24 @@ export function Navbar() {
         } catch {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          setIsLoggedIn(false);
+          setUsername('');
         }
       }
+    } else {
+      setIsLoggedIn(false);
+      setUsername('');
     }
+  };
+
+  useEffect(() => {
+    syncAuth();
+  }, [lastSync]);
+
+  useEffect(() => {
+    const handleStorage = () => syncAuth();
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleLoginClick = () => {
@@ -34,9 +51,7 @@ export function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setIsLoggedIn(false);
-    setUsername('');
-    router.refresh();
+    sync();
   };
 
   const handleSearch = () => {

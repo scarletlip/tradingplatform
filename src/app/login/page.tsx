@@ -26,13 +26,20 @@ export default function LoginPage() {
 
       if (!res.ok) {
         setError(data.error || '登录失败');
+        setLoading(false);
         return;
       }
 
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/');
-      router.refresh();
+
+      // Trigger a small delay then navigate to ensure localStorage is flushed
+      setTimeout(() => {
+        router.push('/');
+        router.refresh();
+        // Dispatch storage event for cross-tab sync
+        window.dispatchEvent(new StorageEvent('storage', { key: 'token' }));
+      }, 50);
     } catch {
       setError('网络错误，请稍后重试');
     } finally {

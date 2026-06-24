@@ -27,6 +27,7 @@ interface Item {
 export default function ProfilePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [favorites, setFavorites] = useState<Item[]>([]);
   const [activeTab, setActiveTab] = useState<'items' | 'favorites'>('items');
@@ -43,6 +44,7 @@ export default function ProfilePage() {
         const user = JSON.parse(userStr);
         setIsLoggedIn(true);
         setUsername(user.username);
+        setCurrentUserId(user.id);
       } catch {
         localStorage.removeItem('token');
       }
@@ -198,6 +200,7 @@ export default function ProfilePage() {
           setSelectedItemId(null);
           setDetailItem(null);
         }}
+        currentUserId={currentUserId ?? undefined}
         onStatusChange={handleStatusChange}
         onDelete={handleDeleteItem}
       />

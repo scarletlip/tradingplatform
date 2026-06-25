@@ -109,6 +109,16 @@ export default function ProfilePage() {
     setEditingItemId(id);
   };
 
+  const handleEditSaved = (updatedItem: Item) => {
+    // Refresh my items list
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    setMyItems((prev) => prev.map((item) => item.id === updatedItem.id ? updatedItem : item));
+    // Update detail item
+    setDetailItem(updatedItem);
+    setEditingItemId(null);
+  };
+
   const handleStatusChange = async (itemId: number, newStatus: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -211,7 +221,7 @@ export default function ProfilePage() {
         onStatusChange={handleStatusChange}
         onDelete={handleDeleteItem}
         onEdit={handleEdit}
-        editing={editingItemId !== null}
+        onSaved={handleEditSaved}
       />
     </div>
   );

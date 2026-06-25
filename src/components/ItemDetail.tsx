@@ -30,33 +30,39 @@ interface ItemDetailProps {
   onStatusChange?: (itemId: number, status: string) => void;
   onDelete?: (itemId: number) => void;
   onEdit?: (itemId: number) => void;
+  onSaved?: (item: NonNullable<ItemDetailProps['item']>) => void;
   editing?: boolean;
 }
 
-export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, isFavorite, onStatusChange, onDelete, onEdit, editing }: ItemDetailProps) {
+export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, isFavorite, onStatusChange, onDelete, onEdit, onSaved, editing }: ItemDetailProps) {
   if (!item || !isOpen) return null;
 
   const imageUrl = item.images || '';
   const isOwner = currentUserId === item.seller.id;
+  const canEdit = isOwner && !!onEdit;
   const [editForm, setEditForm] = useState({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [saveError, setSaveError] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffectLoadCategories();
-
-  function useEffectLoadCategories() {
-    // Load categories once when item changes
+  useEffect(() => {
     fetch('/api/categories')
       .then((r) => r.json())
       .then((data) => setCategories(data.filter((c: any) => c.name !== '全部')))
       .catch(() => {});
-  }
+  }, []);
 
   const startEdit = () => {
+    if (!canEdit) return;
     setEditForm({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
     setSaveError('');
+    setShowEditModal(true);
     onEdit?.(item.id);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
   };
 
   const handleSave = async () => {
@@ -83,7 +89,9 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
         setSaveError(err.error || '保存失败');
         return;
       }
-      onClose();
+      setShowEditModal(false);
+      // Notify parent of successful save
+      if (onSaved) onSaved(item);
     } catch {
       setSaveError('网络错误，请稍后重试');
     } finally {
@@ -232,8 +240,8 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
       </div>
       {/* 编辑弹窗 */}
       <Modal
-        isOpen={editing !== false && item !== null}
-        onClose={onClose}
+        isOpen={showEditModal}
+        onClose={closeEditModal}
         title="编辑商品"
       >
         <div className="space-y-4">

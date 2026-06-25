@@ -99,6 +99,7 @@ export default function PostPage() {
 
       const res = await fetch('/api/items', {
         method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: form,
       });
 

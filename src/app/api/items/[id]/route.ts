@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import prisma from '@/lib/db';
-import { getCurrentUser } from '@/lib/getCurrentUser';
+import { requireAuth } from '@/lib/guard';
 
 export async function GET(
   _request: NextRequest,
@@ -11,30 +11,25 @@ export async function GET(
   try {
     const id = parseInt(params.id, 10);
     if (isNaN(id)) {
-      return NextResponse.json({ error: 'Invalid item ID' }, { status: 400 });
+      return NextResponse.json({ error: '无效的商品ID' }, { status: 400 });
     }
 
     const item = await prisma.item.findUnique({
       where: { id },
       include: {
         seller: {
-          select: {
-            id: true,
-            username: true,
-            avatar: true,
-            contact: true,
-          },
+          select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true },
         },
       },
     });
 
     if (!item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      return NextResponse.json({ error: '商品不存在' }, { status: 404 });
     }
 
     return NextResponse.json(item);
   } catch {
-    return NextResponse.json({ error: 'Failed to fetch item' }, { status: 500 });
+    return NextResponse.json({ error: '获取商品失败' }, { status: 500 });
   }
 }
 
@@ -43,10 +38,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
 
     const id = parseInt(params.id, 10);
     if (isNaN(id)) {
@@ -58,32 +51,61 @@ export async function PATCH(
       return NextResponse.json({ error: '商品不存在' }, { status: 404 });
     }
 
-    if (item.sellerId !== currentUser.userId) {
+    // Admin can edit any item; regular users can only edit their own
+    if (auth.user.role !== 'ADMIN' && item.sellerId !== auth.user.userId) {
       return NextResponse.json({ error: '无权操作此商品' }, { status: 403 });
     }
 
-    const formData = await request.formData();
+    const contentType = request.headers.get('content-type') || '';
     const updates: Record<string, unknown> = {};
-    const allowedFields = ['status', 'title', 'description', 'price', 'category'];
 
-    for (const field of allowedFields) {
-      const val = formData.get(field);
-      if (val !== undefined && val !== '') {
-        updates[field] = field === 'price' ? parseFloat(val as string) : val;
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await request.formData();
+      const stringFields = ['status', 'title', 'description', 'category', 'subCategory', 'condition', 'campusLocation', 'tradeMethod'];
+      const numberFields = ['price', 'originalPrice'];
+      for (const field of stringFields) {
+        const val = formData.get(field);
+        if (val !== undefined && val !== null) updates[field] = val;
       }
+      for (const field of numberFields) {
+        const val = formData.get(field) as string | null;
+        if (val !== undefined && val !== null && val !== '') updates[field] = parseFloat(val);
+      }
+
+      // Handle new image upload
+      const newImageFile = formData.get('image') as File | null;
+      if (newImageFile && newImageFile.size > 0) {
+        if (item.images) {
+          const oldFilePath = path.join(process.cwd(), 'public', item.images);
+          if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+        }
+        updates.images = await saveImage(newImageFile);
+      }
+    } else {
+      const body = await request.json();
+      Object.assign(updates, body);
     }
 
-    // Handle new image upload — delete old file if replacing
-    const newImageFile = formData.get('image') as File | null;
-    if (newImageFile && newImageFile.size > 0) {
-      // Delete old file
-      if (item.images) {
-        const oldFilePath = path.join(process.cwd(), 'public', item.images);
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
+    // Validate price
+    if (updates.price !== undefined) {
+      const p = parseFloat(updates.price as string);
+      if (isNaN(p) || p <= 0 || p > 999999) {
+        return NextResponse.json({ error: '价格需在 0.01-999999 之间' }, { status: 400 });
       }
-      updates.images = await saveImage(newImageFile);
+      updates.price = p;
+    }
+
+    // Validate status transitions (non-admin users)
+    if (updates.status && auth.user.role !== 'ADMIN') {
+      const validTransitions: Record<string, string[]> = {
+        ACTIVE: ['SOLD', 'OFFLINE'],
+        OFFLINE: ['ACTIVE'],
+        SOLD: [],
+      };
+      const allowed = validTransitions[item.status] || [];
+      if (!allowed.includes(updates.status as string)) {
+        return NextResponse.json({ error: `不能从"${item.status}"改为"${updates.status}"` }, { status: 400 });
+      }
     }
 
     if (Object.keys(updates).length > 0) {
@@ -92,7 +114,7 @@ export async function PATCH(
         data: updates,
         include: {
           seller: {
-            select: { id: true, username: true, avatar: true, contact: true },
+            select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true },
           },
         },
       });
@@ -106,14 +128,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
 
     const id = parseInt(params.id, 10);
     if (isNaN(id)) {
@@ -125,16 +145,14 @@ export async function DELETE(
       return NextResponse.json({ error: '商品不存在' }, { status: 404 });
     }
 
-    if (item.sellerId !== currentUser.userId) {
+    if (auth.user.role !== 'ADMIN' && item.sellerId !== auth.user.userId) {
       return NextResponse.json({ error: '无权操作此商品' }, { status: 403 });
     }
 
     // Delete associated image file
     if (item.images) {
       const imgPath = path.join(process.cwd(), 'public', item.images);
-      if (fs.existsSync(imgPath)) {
-        fs.unlinkSync(imgPath);
-      }
+      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
     }
 
     await prisma.item.delete({ where: { id } });
@@ -147,15 +165,10 @@ export async function DELETE(
 function saveImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
     const ext = path.extname(file.name) || '.jpg';
-    const timestamp = Date.now();
-    const filename = `${timestamp}${ext}`;
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
     const filePath = path.join(uploadsDir, filename);
-
     file.arrayBuffer().then((buffer) => {
       fs.writeFile(filePath, Buffer.from(buffer), (err) => {
         if (err) return reject(err);

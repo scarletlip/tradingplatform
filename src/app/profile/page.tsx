@@ -1,15 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Navbar } from '@/components/Navbar';
+import { useRouter } from 'next/navigation';
 import { ItemGrid } from '@/components/ItemGrid';
 import { ItemDetail } from '@/components/ItemDetail';
 
 interface Seller {
   id: number;
-  username: string;
+  studentId: string;
+  name: string;
   avatar: string | null;
-  contact: string | null;
+  email: string | null;
+  dormitory: string | null;
+  phone: string | null;
 }
 
 interface Item {
@@ -17,10 +20,15 @@ interface Item {
   title: string;
   description: string | null;
   price: number;
+  originalPrice?: number | null;
   category: string;
+  subCategory?: string | null;
+  condition?: string | null;
   images: string | null;
   status: string;
   createdAt: string;
+  campusLocation?: string | null;
+  tradeMethod?: string | null;
   seller: Seller;
 }
 
@@ -44,7 +52,7 @@ export default function ProfilePage() {
       try {
         const user = JSON.parse(userStr);
         setIsLoggedIn(true);
-        setUsername(user.username);
+        setUsername(user.name);
         setCurrentUserId(user.id);
       } catch {
         localStorage.removeItem('token');
@@ -57,11 +65,12 @@ export default function ProfilePage() {
 
     const fetchMyItems = async () => {
       try {
-        const res = await fetch('/api/items');
-        const allItems = await res.json();
-        const token = localStorage.getItem('token');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const mine = allItems.filter((item: any) => item.seller.id === user.id);
+        const userStr = localStorage.getItem('user');
+        if (!userStr) return;
+        const user = JSON.parse(userStr);
+        const res = await fetch(`/api/items?sellerId=${user.id}`);
+        const data = await res.json();
+        const mine = data.items || [];
         setMyItems(mine);
       } catch {
         setMyItems([]);
@@ -131,9 +140,7 @@ export default function ProfilePage() {
         body: JSON.stringify({ status: newStatus }),
       });
       setMyItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, status: newStatus } : item)));
-    } catch {
-      alert('操作失败');
-    }
+    } catch { /* non-critical */ }
   };
 
   const handleDeleteItem = async (itemId: number) => {
@@ -145,9 +152,7 @@ export default function ProfilePage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMyItems((prev) => prev.filter((item) => item.id !== itemId));
-    } catch {
-      alert('删除失败');
-    }
+    } catch { /* non-critical */ }
   };
 
   if (!isLoggedIn) return null;

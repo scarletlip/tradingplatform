@@ -2,28 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Navbar } from '@/components/Navbar';
-import { ItemGrid } from '@/components/ItemGrid';
-import { ItemDetail } from '@/components/ItemDetail';
 
-interface Seller {
-  id: number;
-  username: string;
-  avatar: string | null;
-  contact: string | null;
-}
-
-interface Item {
-  id: number;
-  title: string;
-  description: string | null;
-  price: number;
-  category: string;
-  images: string | null;
-  status: string;
-  createdAt: string;
-  seller: Seller;
-}
+const CONDITION_OPTIONS = ['99新', '95新', '9成新', '8成新', '有瑕疵'];
 
 export default function PostPage() {
   const router = useRouter();
@@ -35,7 +15,12 @@ export default function PostPage() {
     title: '',
     description: '',
     price: '',
+    originalPrice: '',
     category: '',
+    subCategory: '',
+    condition: '',
+    campusLocation: '',
+    tradeMethod: '面交',
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
@@ -95,6 +80,11 @@ export default function PostPage() {
       form.append('description', formData.description);
       form.append('price', formData.price);
       form.append('category', formData.category);
+      if (formData.originalPrice) form.append('originalPrice', formData.originalPrice);
+      if (formData.subCategory) form.append('subCategory', formData.subCategory);
+      if (formData.condition) form.append('condition', formData.condition);
+      if (formData.campusLocation) form.append('campusLocation', formData.campusLocation);
+      if (formData.tradeMethod) form.append('tradeMethod', formData.tradeMethod);
       if (imageFile) form.append('image', imageFile);
 
       const res = await fetch('/api/items', {
@@ -133,6 +123,7 @@ export default function PostPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-xl shadow-sm border p-6">
+        {/* 标题 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">标题 *</label>
           <input
@@ -145,6 +136,7 @@ export default function PostPage() {
           />
         </div>
 
+        {/* 分类 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
           <select
@@ -162,20 +154,95 @@ export default function PostPage() {
           </select>
         </div>
 
+        {/* 子分类 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">价格 (元) *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">子分类</label>
           <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.price}
-            onChange={(e) => handleChange('price', e.target.value)}
+            type="text"
+            value={formData.subCategory}
+            onChange={(e) => handleChange('subCategory', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-            placeholder="0.00"
-            required
+            placeholder="如：计算机教材、耳机等"
           />
         </div>
 
+        {/* 价格行 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">售价 (元) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.price}
+              onChange={(e) => handleChange('price', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="0.00"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">原价 (元)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.originalPrice}
+              onChange={(e) => handleChange('originalPrice', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="原价（选填）"
+            />
+          </div>
+        </div>
+
+        {/* 成色 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
+          <div className="flex flex-wrap gap-2">
+            {CONDITION_OPTIONS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => handleChange('condition', formData.condition === c ? '' : c)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  formData.condition === c
+                    ? 'bg-green-500 text-white border-green-500'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 地址 + 交易方式 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">所在宿舍</label>
+            <input
+              type="text"
+              value={formData.campusLocation}
+              onChange={(e) => handleChange('campusLocation', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="如：兰园2栋"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">交易方式</label>
+            <select
+              value={formData.tradeMethod}
+              onChange={(e) => handleChange('tradeMethod', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            >
+              <option value="面交">面交</option>
+              <option value="自取">自取</option>
+              <option value="快递">快递</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 图片 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">图片</label>
           <div
@@ -213,6 +280,7 @@ export default function PostPage() {
           />
         </div>
 
+        {/* 描述 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
           <textarea

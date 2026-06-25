@@ -4,22 +4,22 @@ import { verifyPassword, generateToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json();
+    const { studentId, password } = await request.json();
 
-    if (!username || !password) {
+    if (!studentId || !password) {
       return NextResponse.json(
-        { error: 'Username and password are required' },
+        { error: '学号和密码为必填项' },
         { status: 400 }
       );
     }
 
     const user = await prisma.user.findUnique({
-      where: { username },
+      where: { studentId },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: '学号或密码错误' },
         { status: 401 }
       );
     }
@@ -28,28 +28,34 @@ export async function POST(request: NextRequest) {
 
     if (!isValid) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: '学号或密码错误' },
         { status: 401 }
       );
     }
 
     const token = generateToken({
       userId: user.id,
-      username: user.username,
+      studentId: user.studentId,
+      name: user.name,
+      role: user.role,
     });
 
     return NextResponse.json({
       token,
       user: {
         id: user.id,
-        username: user.username,
+        studentId: user.studentId,
+        name: user.name,
+        role: user.role,
         avatar: user.avatar,
-        contact: user.contact,
+        email: user.email,
+        dormitory: user.dormitory,
+        phone: user.phone,
       },
     });
   } catch {
     return NextResponse.json(
-      { error: 'Login failed' },
+      { error: '登录失败，请稍后重试' },
       { status: 500 }
     );
   }

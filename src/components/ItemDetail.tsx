@@ -5,9 +5,12 @@ import { Modal } from './ui/Modal';
 
 interface Seller {
   id: number;
-  username: string;
+  studentId: string;
+  name: string;
   avatar: string | null;
-  contact: string | null;
+  email: string | null;
+  dormitory: string | null;
+  phone: string | null;
 }
 
 interface ItemDetailProps {
@@ -16,10 +19,15 @@ interface ItemDetailProps {
     title: string;
     description: string | null;
     price: number;
+    originalPrice?: number | null;
     category: string;
+    subCategory?: string | null;
+    condition?: string | null;
     images: string | null;
     status: string;
     createdAt: string;
+    campusLocation?: string | null;
+    tradeMethod?: string | null;
     seller: Seller;
   } | null;
   isOpen: boolean;
@@ -40,7 +48,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
   const imageUrl = item.images || '';
   const isOwner = currentUserId === item.seller.id;
   const canEdit = isOwner && !!onEdit;
-  const [editForm, setEditForm] = useState({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
+  const [editForm, setEditForm] = useState({ title: item.title, price: String(item.price), category: item.category, images: item.images || '', description: item.description || '', originalPrice: String(item.originalPrice || ''), subCategory: item.subCategory || '', condition: item.condition || '', campusLocation: item.campusLocation || '', tradeMethod: item.tradeMethod || '面交' });
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [saveError, setSaveError] = useState('');
@@ -58,7 +66,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
 
   const startEdit = () => {
     if (!canEdit) return;
-    setEditForm({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
+    setEditForm({ title: item.title, price: String(item.price), category: item.category, images: item.images || '', description: item.description || '', originalPrice: String(item.originalPrice || ''), subCategory: item.subCategory || '', condition: item.condition || '', campusLocation: item.campusLocation || '', tradeMethod: item.tradeMethod || '面交' });
     setSaveError('');
     setShowEditModal(true);
     onEdit?.(item.id);
@@ -97,6 +105,12 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
       form.append('title', editForm.title.trim());
       form.append('price', editForm.price);
       form.append('category', editForm.category);
+      if (editForm.description) form.append('description', editForm.description);
+      if (editForm.originalPrice) form.append('originalPrice', editForm.originalPrice);
+      if (editForm.subCategory) form.append('subCategory', editForm.subCategory);
+      if (editForm.condition) form.append('condition', editForm.condition);
+      if (editForm.campusLocation) form.append('campusLocation', editForm.campusLocation);
+      if (editForm.tradeMethod) form.append('tradeMethod', editForm.tradeMethod);
       if (editImageFile) form.append('image', editImageFile);
 
       const res = await fetch(`/api/items/${item.id}`, {
@@ -104,13 +118,13 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
+      const updatedItem = await res.json();
       if (!res.ok) {
-        const err = await res.json();
-        setSaveError(err.error || '保存失败');
+        setSaveError(updatedItem.error || '保存失败');
         return;
       }
       setShowEditModal(false);
-      if (onSaved) onSaved(item);
+      if (onSaved) onSaved(updatedItem);
     } catch {
       setSaveError('网络错误，请稍后重试');
     } finally {
@@ -150,6 +164,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
             <img
               src={imageUrl}
               alt={item.title}
+              loading="lazy"
               className="w-full aspect-square object-cover rounded-lg"
             />
           ) : (
@@ -163,9 +178,22 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
           <div>
             <div className="flex items-start justify-between">
               <h3 className="text-xl font-semibold text-gray-900">{item.title}</h3>
-              <span className="text-2xl font-bold text-primary-600">¥{item.price}</span>
+              <div className="text-right">
+                <span className="text-2xl font-bold text-primary-600">¥{item.price}</span>
+                {item.originalPrice && item.originalPrice > item.price && (
+                  <p className="text-sm text-gray-400 line-through">原价 ¥{item.originalPrice}</p>
+                )}
+              </div>
             </div>
-            <p className="text-sm text-gray-500 mt-1">分类: {item.category}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-gray-500">分类: {item.category}</p>
+              {item.subCategory && <p className="text-sm text-gray-400">· {item.subCategory}</p>}
+            </div>
+            {item.condition && (
+              <span className="inline-block mt-1 bg-green-50 text-green-600 text-xs px-2 py-0.5 rounded">
+                {item.condition}
+              </span>
+            )}
             {item.status !== 'ACTIVE' && (
               <p className="text-sm text-gray-400 mt-1">
                 状态: {item.status === 'SOLD' ? '已售出' : '已下架'}
@@ -180,6 +208,23 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
             </div>
           )}
 
+          {(item.campusLocation || item.tradeMethod) && (
+            <div className="flex gap-6 text-sm">
+              {item.campusLocation && (
+                <div>
+                  <span className="text-gray-400">地址</span>
+                  <p className="text-gray-700">{item.campusLocation}</p>
+                </div>
+              )}
+              {item.tradeMethod && (
+                <div>
+                  <span className="text-gray-400">交易方式</span>
+                  <p className="text-gray-700">{item.tradeMethod}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="border-t pt-4">
             <h4 className="text-sm font-medium text-gray-700 mb-2">卖家信息</h4>
             <div className="flex items-center gap-3">
@@ -187,30 +232,41 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
                 <img src={item.seller.avatar} alt="" className="w-10 h-10 rounded-full" />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-medium">
-                  {item.seller.username.charAt(0)}
+                  {item.seller.name.charAt(0)}
                 </div>
               )}
               <div>
-                <p className="font-medium text-gray-900">{item.seller.username}</p>
-                {item.seller.contact && (
-                  <p className="text-sm text-gray-500">{item.seller.contact}</p>
-                )}
+                <p className="font-medium text-gray-900">{item.seller.name}</p>
+                <p className="text-xs text-gray-400">学号: {item.seller.studentId}</p>
               </div>
             </div>
-
-            {/* 收藏按钮（非本人） */}
-            {!isOwner && onFavorite && (
-              <button
-                onClick={() => onFavorite(item.id)}
-                className={`mt-3 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isFavorite
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {isFavorite ? '取消收藏' : '收藏'}
-              </button>
-            )}
+            <div className="mt-3 space-y-1.5 text-sm">
+              {item.seller.dormitory && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{item.seller.dormitory}</span>
+                </div>
+              )}
+              {item.seller.phone && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  <span>{item.seller.phone}</span>
+                </div>
+              )}
+              {item.seller.email && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>{item.seller.email}</span>
+                </div>
+              )}
+            </div>
 
             {/* 管理按钮（本人） */}
             {isOwner && (
@@ -279,17 +335,31 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">价格 (元) *</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={editForm.price}
-              onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-              placeholder="0.00"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">售价 (元) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editForm.price}
+                onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">原价 (元)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editForm.originalPrice}
+                onChange={(e) => setEditForm((p) => ({ ...p, originalPrice: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                placeholder="选填"
+              />
+            </div>
           </div>
 
           <div>
@@ -303,6 +373,72 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">子分类</label>
+            <input
+              type="text"
+              value={editForm.subCategory}
+              onChange={(e) => setEditForm((p) => ({ ...p, subCategory: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="如：计算机教材"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">成色</label>
+            <div className="flex flex-wrap gap-2">
+              {['99新', '95新', '9成新', '8成新', '有瑕疵'].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setEditForm((p) => ({ ...p, condition: p.condition === c ? '' : c }))}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    editForm.condition === c
+                      ? 'bg-green-500 text-white border-green-500'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">所在宿舍</label>
+            <input
+              type="text"
+              value={editForm.campusLocation}
+              onChange={(e) => setEditForm((p) => ({ ...p, campusLocation: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="如：兰园2栋"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+            <textarea
+              value={editForm.description}
+              onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-none"
+              placeholder="描述一下商品"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">交易方式</label>
+            <select
+              value={editForm.tradeMethod}
+              onChange={(e) => setEditForm((p) => ({ ...p, tradeMethod: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            >
+              <option value="面交">面交</option>
+              <option value="自取">自取</option>
+              <option value="快递">快递</option>
             </select>
           </div>
 
@@ -343,7 +479,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
 
           <div className="flex gap-3 pt-2">
             <button
-              onClick={onClose}
+              onClick={closeEditModal}
               disabled={saving}
               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-medium transition-colors disabled:bg-gray-200"
             >

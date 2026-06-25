@@ -15,9 +15,12 @@ interface Category {
 
 interface Seller {
   id: number;
-  username: string;
+  studentId: string;
+  name: string;
   avatar: string | null;
-  contact: string | null;
+  email: string | null;
+  dormitory: string | null;
+  phone: string | null;
 }
 
 interface Item {
@@ -25,12 +28,19 @@ interface Item {
   title: string;
   description: string | null;
   price: number;
+  originalPrice?: number | null;
   category: string;
+  subCategory?: string | null;
+  condition?: string | null;
   images: string | null;
   status: string;
   createdAt: string;
+  campusLocation?: string | null;
+  tradeMethod?: string | null;
   seller: Seller;
 }
+
+const PAGE_SIZE = 12;
 
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -41,6 +51,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageInput, setPageInput] = useState('1');
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -50,6 +67,11 @@ export default function Home() {
         try {
           const user = JSON.parse(userStr);
           setCurrentUserId(user.id);
+          // Load favorites
+          fetch('/api/favorites', { headers: { Authorization: `Bearer ${token}` } })
+            .then((r) => r.json())
+            .then((favs: any[]) => setFavoriteIds(new Set(favs.map((f: any) => f.id))))
+            .catch(() => {});
         } catch {}
       }
     }
@@ -62,28 +84,42 @@ export default function Home() {
       .catch(() => setCategories([{ id: 0, name: '全部', icon: null, sortOrder: 0 }]));
   }, []);
 
+  // Fetch items with pagination
   useEffect(() => {
     const fetchItems = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/items${selectedCategory === '全部' ? '' : `?category=${encodeURIComponent(selectedCategory)}`}`);
+        const params = new URLSearchParams();
+        params.set('page', String(page));
+        params.set('pageSize', String(PAGE_SIZE));
+        if (selectedCategory !== '全部') params.set('category', selectedCategory);
+
+        const res = await fetch(`/api/items?${params.toString()}`);
         const data = await res.json();
-        setItems(data);
+        setItems(data.items || []);
+        setTotal(data.total || 0);
       } catch {
         setItems([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
     };
     fetchItems();
-  }, [selectedCategory]);
+  }, [selectedCategory, page]);
+
+  // When category changes, reset to page 1
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setPage(1);
+    setPageInput('1');
+  };
 
   const handleItemSelect = async (id: number) => {
     try {
       const res = await fetch(`/api/items/${id}`);
       const data = await res.json();
 
-      // Check if favorited — only when logged in
       try {
         const token = localStorage.getItem('token');
         if (token) {
@@ -113,13 +149,19 @@ export default function Home() {
   const handleFavorite = async (itemId: number) => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
+      if (!token) return; // Handled by ItemCard toast
 
-      const res = await fetch(`/api/favorites/${itemId}`, {
-        method: 'POST',
+      const wasFav = favoriteIds.has(itemId);
+
+      // Optimistic update
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        wasFav ? next.delete(itemId) : next.add(itemId);
+        return next;
+      });
+
+      const res = await fetch(wasFav ? `/api/favorites/${itemId}` : '/api/favorites', {
+        method: wasFav ? 'DELETE' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -127,11 +169,16 @@ export default function Home() {
         body: JSON.stringify({ itemId }),
       });
 
-      if (res.ok || res.status === 200) {
-        setIsFavorite(!isFavorite);
+      // Revert on failure
+      if (!res.ok) {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          wasFav ? next.add(itemId) : next.delete(itemId);
+          return next;
+        });
       }
     } catch {
-      console.error('Favorite toggle failed');
+      // Silent fail
     }
   };
 
@@ -148,16 +195,14 @@ export default function Home() {
       });
 
       if (res.ok) {
-        // Refresh item detail
         if (selectedItemId === itemId && detailItem) {
           const updated = { ...detailItem, status: newStatus };
           setDetailItem(updated);
-          // Update items list
           setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, status: newStatus } : item));
         }
       }
     } catch {
-      alert('操作失败');
+      // Silent fail - non-critical
     }
   };
 
@@ -173,9 +218,25 @@ export default function Home() {
         setDetailItem(null);
         setSelectedItemId(null);
         setItems((prev) => prev.filter((item) => item.id !== itemId));
+        setTotal((t) => t - 1);
       }
     } catch {
-      alert('删除失败');
+      // Silent fail - non-critical
+    }
+  };
+
+  const goToPage = (targetPage: number) => {
+    const p = Math.max(1, Math.min(targetPage, totalPages));
+    setPage(p);
+    setPageInput(String(p));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageInputKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const n = parseInt(pageInput);
+      if (!isNaN(n) && n >= 1) goToPage(n);
+      else setPageInput(String(page));
     }
   };
 
@@ -186,7 +247,7 @@ export default function Home() {
         <CategoryFilter
           categories={categories}
           selectedCategory={selectedCategory}
-          onSelect={setSelectedCategory}
+          onSelect={handleCategoryChange}
         />
         <div className="mt-8">
           {loading ? (
@@ -194,7 +255,51 @@ export default function Home() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
             </div>
           ) : (
-            <ItemGrid items={items} onItemSelect={handleItemSelect} />
+            <>
+              <ItemGrid items={items} onItemSelect={handleItemSelect} onFavorite={handleFavorite} favoriteIds={favoriteIds} />
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mt-8 mb-4">
+                  <button
+                    onClick={() => goToPage(page - 1)}
+                    disabled={page <= 1}
+                    className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    上一页
+                  </button>
+
+                  <span className="text-sm text-gray-500">
+                    第
+                  </span>
+                  <input
+                    type="text"
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    onKeyDown={handlePageInputKey}
+                    onBlur={() => {
+                      const n = parseInt(pageInput);
+                      if (!isNaN(n) && n >= 1 && n <= totalPages) goToPage(n);
+                      else setPageInput(String(page));
+                    }}
+                    className="w-14 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                  />
+                  <span className="text-sm text-gray-500">
+                    / {totalPages} 页
+                  </span>
+
+                  <button
+                    onClick={() => goToPage(page + 1)}
+                    disabled={page >= totalPages}
+                    className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    下一页
+                  </button>
+
+                  <span className="text-xs text-gray-400 ml-2">共 {total} 件</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

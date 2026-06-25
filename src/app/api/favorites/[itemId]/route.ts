@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getCurrentUser } from '@/lib/getCurrentUser';
+import { requireAuth } from '@/lib/guard';
 
-export async function POST(request: NextRequest) {
+// DELETE: remove favorite
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { itemId: string } }
+) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
+
+    const itemId = parseInt(params.itemId, 10);
+    if (isNaN(itemId)) {
+      return NextResponse.json({ error: '无效的商品ID' }, { status: 400 });
     }
 
-    const body = await request.json();
-    const { itemId } = body;
-
-    if (!itemId) {
-      return NextResponse.json({ error: '商品ID为必填项' }, { status: 400 });
-    }
-
-    // Remove favorite (toggle off)
     await prisma.favorite.deleteMany({
-      where: { userId: currentUser.userId, itemId },
+      where: { userId: auth.user.userId, itemId },
     });
 
     return NextResponse.json({ success: true });
@@ -27,29 +26,26 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+// GET: check if specific item is favorited
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { itemId: string } }
+) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
+
+    const itemId = parseInt(params.itemId, 10);
+    if (isNaN(itemId)) {
+      return NextResponse.json({ error: '无效的商品ID' }, { status: 400 });
     }
 
-    const favorites = await prisma.favorite.findMany({
-      where: { userId: currentUser.userId },
-      include: {
-        item: {
-          include: {
-            seller: {
-              select: { id: true, username: true, avatar: true, contact: true },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const fav = await prisma.favorite.findUnique({
+      where: { userId_itemId: { userId: auth.user.userId, itemId } },
     });
 
-    return NextResponse.json(favorites.map((f) => f.item));
+    return NextResponse.json({ favorited: !!fav });
   } catch {
-    return NextResponse.json({ error: '获取收藏失败' }, { status: 500 });
+    return NextResponse.json({ error: '查询失败' }, { status: 500 });
   }
 }

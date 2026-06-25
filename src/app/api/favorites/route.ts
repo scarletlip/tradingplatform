@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getCurrentUser } from '@/lib/getCurrentUser';
+import { requireAuth } from '@/lib/guard';
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
 
     const favorites = await prisma.favorite.findMany({
-      where: { userId: currentUser.userId },
+      where: { userId: auth.user.userId },
       include: {
         item: {
           include: {
             seller: {
-              select: { id: true, username: true, avatar: true, contact: true },
+              select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true },
             },
           },
         },
@@ -31,10 +29,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
+    const auth = await requireAuth(request);
+    if ('res' in auth) return auth.res;
 
     const body = await request.json();
     const { itemId } = body;
@@ -47,9 +43,12 @@ export async function POST(request: NextRequest) {
     if (!item) {
       return NextResponse.json({ error: '商品不存在' }, { status: 404 });
     }
+    if (item.status !== 'ACTIVE') {
+      return NextResponse.json({ error: '该商品已下架或已售出' }, { status: 400 });
+    }
 
     const favorite = await prisma.favorite.create({
-      data: { userId: currentUser.userId, itemId },
+      data: { userId: auth.user.userId, itemId },
     });
 
     return NextResponse.json(favorite, { status: 201 });

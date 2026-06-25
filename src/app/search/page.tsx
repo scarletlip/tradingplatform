@@ -7,9 +7,12 @@ import { ItemDetail } from '@/components/ItemDetail';
 
 interface Seller {
   id: number;
-  username: string;
+  studentId: string;
+  name: string;
   avatar: string | null;
-  contact: string | null;
+  email: string | null;
+  dormitory: string | null;
+  phone: string | null;
 }
 
 interface Item {
@@ -17,10 +20,15 @@ interface Item {
   title: string;
   description: string | null;
   price: number;
+  originalPrice?: number | null;
   category: string;
+  subCategory?: string | null;
+  condition?: string | null;
   images: string | null;
   status: string;
   createdAt: string;
+  campusLocation?: string | null;
+  tradeMethod?: string | null;
   seller: Seller;
 }
 
@@ -52,7 +60,7 @@ function SearchPageInner() {
       try {
         const res = await fetch(`/api/items?search=${encodeURIComponent(initialQuery)}`);
         const data = await res.json();
-        setItems(data);
+        setItems(data.items || []);
       } catch {
         setItems([]);
       } finally {

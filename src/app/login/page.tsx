@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ studentId, password }),
       });
 
       const data = await res.json();
@@ -52,7 +52,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-white rounded-xl shadow-sm border p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">登录</h1>
         <p className="text-gray-500 text-sm mb-6">
-          演示账号: 张三 / 李四 / 王五, 密码: demo123
+          使用学号和密码登录，初始默认密码: 123456
         </p>
 
         {error && (
@@ -63,16 +63,16 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              用户名
+            <label htmlFor="studentId" className="block text-sm font-medium text-gray-700 mb-1">
+              学号
             </label>
             <input
-              id="username"
+              id="studentId"
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
-              placeholder="请输入用户名"
+              placeholder="请输入学号"
               required
             />
           </div>

@@ -18,10 +18,14 @@ model Category {
 
 model User {
   id        Int         @id @default(autoincrement())
-  username  String      @unique
+  studentId String      @unique
+  name      String
   password  String
+  role      String      @default("USER")
+  email     String?
+  dormitory String?
+  phone     String?
   avatar    String?
-  contact   String?
   createdAt DateTime    @default(now())
   items     Item[]
   favorites Favorite[]
@@ -30,17 +34,22 @@ model User {
 }
 
 model Item {
-  id          Int        @id  @default(autoincrement())
-  title       String
-  description String?
-  price       Float
-  category    String
-  images      String?
-  sellerId    Int
-  status      String     @default("ACTIVE")
-  createdAt   DateTime   @default(now())
-  seller      User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  favorites   Favorite[]
+  id              Int        @id @default(autoincrement())
+  title           String
+  description     String?
+  price           Float
+  originalPrice   Float?
+  category        String
+  subCategory     String?
+  condition       String?
+  images          String?
+  campusLocation  String?
+  tradeMethod     String?
+  sellerId        Int
+  status          String     @default("ACTIVE")
+  createdAt       DateTime   @default(now())
+  seller          User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  favorites       Favorite[]
 
   @@map("items")
 }

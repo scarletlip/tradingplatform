@@ -92,6 +92,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
     setSaving(true);
     setSaveError('');
     try {
+      const token = localStorage.getItem('token');
       const form = new FormData();
       form.append('title', editForm.title.trim());
       form.append('price', editForm.price);
@@ -100,6 +101,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
 
       const res = await fetch(`/api/items/${item.id}`, {
         method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       if (!res.ok) {

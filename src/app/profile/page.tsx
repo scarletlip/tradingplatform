@@ -34,6 +34,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -93,14 +94,19 @@ export default function ProfilePage() {
   }, [isLoggedIn, activeTab]);
 
   const handleItemSelect = async (id: number) => {
+    setSelectedItemId(id);
+    setEditingItemId(null); // 关闭编辑模式
     try {
       const res = await fetch(`/api/items/${id}`);
       const data = await res.json();
       setDetailItem(data);
-      setSelectedItemId(id);
     } catch {
       console.error('Failed to fetch item detail');
     }
+  };
+
+  const handleEdit = (id: number) => {
+    setEditingItemId(id);
   };
 
   const handleStatusChange = async (itemId: number, newStatus: string) => {
@@ -199,10 +205,13 @@ export default function ProfilePage() {
         onClose={() => {
           setSelectedItemId(null);
           setDetailItem(null);
+          setEditingItemId(null);
         }}
         currentUserId={currentUserId ?? undefined}
         onStatusChange={handleStatusChange}
         onDelete={handleDeleteItem}
+        onEdit={handleEdit}
+        editing={editingItemId !== null}
       />
     </div>
   );

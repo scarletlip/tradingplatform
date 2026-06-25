@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Modal } from './ui/Modal';
 
 interface Seller {
   id: number;
@@ -28,13 +29,67 @@ interface ItemDetailProps {
   isFavorite?: boolean;
   onStatusChange?: (itemId: number, status: string) => void;
   onDelete?: (itemId: number) => void;
+  onEdit?: (itemId: number) => void;
+  editing?: boolean;
 }
 
-export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, isFavorite, onStatusChange, onDelete }: ItemDetailProps) {
+export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, isFavorite, onStatusChange, onDelete, onEdit, editing }: ItemDetailProps) {
   if (!item || !isOpen) return null;
 
   const imageUrl = item.images || '';
   const isOwner = currentUserId === item.seller.id;
+  const [editForm, setEditForm] = useState({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
+  const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [saveError, setSaveError] = useState('');
+
+  useEffectLoadCategories();
+
+  function useEffectLoadCategories() {
+    // Load categories once when item changes
+    fetch('/api/categories')
+      .then((r) => r.json())
+      .then((data) => setCategories(data.filter((c: any) => c.name !== '全部')))
+      .catch(() => {});
+  }
+
+  const startEdit = () => {
+    setEditForm({ title: item.title, price: String(item.price), category: item.category, images: item.images || '' });
+    setSaveError('');
+    onEdit?.(item.id);
+  };
+
+  const handleSave = async () => {
+    if (!editForm.title.trim()) { setSaveError('标题不能为空'); return; }
+    if (!editForm.price || isNaN(parseFloat(editForm.price)) || parseFloat(editForm.price) <= 0) { setSaveError('请输入有效价格'); return; }
+    if (!editForm.category) { setSaveError('请选择分类'); return; }
+
+    setSaving(true);
+    setSaveError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          price: parseFloat(editForm.price),
+          category: editForm.category,
+          images: editForm.images || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setSaveError(err.error || '保存失败');
+        return;
+      }
+      onClose();
+    } catch {
+      setSaveError('网络错误，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleStatusToggle = (status: string) => {
     if (onStatusChange) onStatusChange(item.id, status);
@@ -134,6 +189,12 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
             {isOwner && (
               <div className="mt-3 space-y-2">
                 <p className="text-sm text-gray-500 text-center">这是你发布的商品</p>
+                <button
+                  onClick={startEdit}
+                  className="text-sm text-primary-500 hover:text-primary-600 font-medium transition-colors"
+                >
+                  编辑 &rsaquo;
+                </button>
                 {item.status === 'ACTIVE' && (
                   <div className="flex gap-2">
                     <button
@@ -169,6 +230,84 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
           </div>
         </div>
       </div>
+      {/* 编辑弹窗 */}
+      <Modal
+        isOpen={editing !== false && item !== null}
+        onClose={onClose}
+        title="编辑商品"
+      >
+        <div className="space-y-4">
+          {saveError && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg">{saveError}</div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">标题 *</label>
+            <input
+              type="text"
+              value={editForm.title}
+              onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="商品标题"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">价格 (元) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={editForm.price}
+              onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="0.00"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">分类 *</label>
+            <select
+              value={editForm.category}
+              onChange={(e) => setEditForm((p) => ({ ...p, category: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            >
+              <option value="">请选择分类</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">图片 URL</label>
+            <input
+              type="url"
+              value={editForm.images}
+              onChange={(e) => setEditForm((p) => ({ ...p, images: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-medium transition-colors disabled:bg-gray-200"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 bg-primary-500 hover:bg-primary-600 disabled:bg-primary-300 text-white py-2 rounded-lg font-medium transition-colors"
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

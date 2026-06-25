@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/getCurrentUser';
 
@@ -47,11 +49,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { title, description, price, category, images } = body;
+    const formData = await request.formData();
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const price = formData.get('price') as string;
+    const category = formData.get('category') as string;
+    const imageFile = formData.get('image') as File | null;
 
     if (!title || !price || !category) {
       return NextResponse.json({ error: '标题、价格和分类为必填项' }, { status: 400 });
+    }
+
+    let imagesUrl: string | null = null;
+    if (imageFile && imageFile.size > 0) {
+      imagesUrl = await saveImage(imageFile);
     }
 
     const item = await prisma.item.create({
@@ -60,7 +71,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         price: parseFloat(price),
         category,
-        images: images || null,
+        images: imagesUrl,
         sellerId: currentUser.userId,
         status: 'ACTIVE',
       },
@@ -75,4 +86,25 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: '创建商品失败' }, { status: 500 });
   }
+}
+
+function saveImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const ext = path.extname(file.name) || '.jpg';
+    const timestamp = Date.now();
+    const filename = `${timestamp}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    file.arrayBuffer().then((buffer) => {
+      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
+        if (err) return reject(err);
+        resolve(`/uploads/${filename}`);
+      });
+    }).catch(reject);
+  });
 }

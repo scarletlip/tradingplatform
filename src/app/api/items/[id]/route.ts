@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/getCurrentUser';
 
@@ -60,27 +62,44 @@ export async function PATCH(
       return NextResponse.json({ error: '无权操作此商品' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const allowedFields = ['status', 'title', 'description', 'price', 'category', 'images'];
+    const formData = await request.formData();
     const updates: Record<string, unknown> = {};
+    const allowedFields = ['status', 'title', 'description', 'price', 'category'];
 
     for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updates[field] = body[field];
+      const val = formData.get(field);
+      if (val !== undefined && val !== '') {
+        updates[field] = field === 'price' ? parseFloat(val as string) : val;
       }
     }
 
-    const updatedItem = await prisma.item.update({
-      where: { id },
-      data: updates,
-      include: {
-        seller: {
-          select: { id: true, username: true, avatar: true, contact: true },
-        },
-      },
-    });
+    // Handle new image upload — delete old file if replacing
+    const newImageFile = formData.get('image') as File | null;
+    if (newImageFile && newImageFile.size > 0) {
+      // Delete old file
+      if (item.images) {
+        const oldFilePath = path.join(process.cwd(), 'public', item.images);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      }
+      updates.images = await saveImage(newImageFile);
+    }
 
-    return NextResponse.json(updatedItem);
+    if (Object.keys(updates).length > 0) {
+      const updatedItem = await prisma.item.update({
+        where: { id },
+        data: updates,
+        include: {
+          seller: {
+            select: { id: true, username: true, avatar: true, contact: true },
+          },
+        },
+      });
+      return NextResponse.json(updatedItem);
+    }
+
+    return NextResponse.json(item);
   } catch {
     return NextResponse.json({ error: '更新失败' }, { status: 500 });
   }
@@ -110,9 +129,38 @@ export async function DELETE(
       return NextResponse.json({ error: '无权操作此商品' }, { status: 403 });
     }
 
+    // Delete associated image file
+    if (item.images) {
+      const imgPath = path.join(process.cwd(), 'public', item.images);
+      if (fs.existsSync(imgPath)) {
+        fs.unlinkSync(imgPath);
+      }
+    }
+
     await prisma.item.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: '删除失败' }, { status: 500 });
   }
+}
+
+function saveImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const ext = path.extname(file.name) || '.jpg';
+    const timestamp = Date.now();
+    const filename = `${timestamp}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    file.arrayBuffer().then((buffer) => {
+      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
+        if (err) return reject(err);
+        resolve(`/uploads/${filename}`);
+      });
+    }).catch(reject);
+  });
 }

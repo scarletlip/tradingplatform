@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { verifyToken, JwtPayload } from '@/lib/auth';
+import prisma from '@/lib/db';
 
 export interface CurrentUser {
   userId: number;
@@ -21,10 +22,26 @@ export async function getCurrentUser(request: NextRequest): Promise<CurrentUser 
     return null;
   }
 
-  return {
-    userId: payload.userId,
-    studentId: payload.studentId,
-    name: payload.name,
-    role: payload.role,
-  };
+  // Verify role against database to catch BANNED users whose JWT predates the ban
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { role: true },
+    });
+    if (!user) return null;
+    return {
+      userId: payload.userId,
+      studentId: payload.studentId,
+      name: payload.name,
+      role: user.role,
+    };
+  } catch {
+    // DB unavailable — fallback to JWT role
+    return {
+      userId: payload.userId,
+      studentId: payload.studentId,
+      name: payload.name,
+      role: payload.role,
+    };
+  }
 }

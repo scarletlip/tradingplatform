@@ -29,6 +29,8 @@ model User {
   createdAt DateTime    @default(now())
   items     Item[]
   favorites Favorite[]
+  reservationsBought Reservation[] @relation("buyer")
+  reservationsSold   Reservation[] @relation("seller")
 
   @@map("users")
 }
@@ -50,8 +52,22 @@ model Item {
   createdAt       DateTime   @default(now())
   seller          User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   favorites       Favorite[]
+  reservation     Reservation?
 
   @@map("items")
+}
+
+model Reservation {
+  id        Int      @id @default(autoincrement())
+  itemId    Int      @unique
+  buyerId   Int
+  sellerId  Int
+  createdAt DateTime @default(now())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  buyer     User     @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller    User     @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@map("reservations")
 }
 
 model Favorite {

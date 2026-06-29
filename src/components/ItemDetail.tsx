@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Modal } from './ui/Modal';
+import { compressImage } from '@/lib/compressImage';
 
 interface Seller {
   id: number;
@@ -29,6 +30,16 @@ interface ItemDetailProps {
     campusLocation?: string | null;
     tradeMethod?: string | null;
     seller: Seller;
+    reservation?: {
+      buyer: {
+        id: number;
+        studentId: string;
+        name: string;
+        email: string | null;
+        dormitory: string | null;
+        phone: string | null;
+      };
+    } | null;
   } | null;
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +58,11 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
 
   const imageUrl = item.images || '';
   const isOwner = currentUserId === item.seller.id;
+  const isReserved = item.status === 'RESERVED';
+  const isBuyer = isReserved && item.reservation?.buyer.id === currentUserId;
+  const [reserving, setReserving] = useState(false);
+  const [cancelReserving, setCancelReserving] = useState(false);
+  const [reserveError, setReserveError] = useState('');
   const canEdit = isOwner && !!onEdit;
   const [editForm, setEditForm] = useState({ title: item.title, price: String(item.price), category: item.category, images: item.images || '', description: item.description || '', originalPrice: String(item.originalPrice || ''), subCategory: item.subCategory || '', condition: item.condition || '', campusLocation: item.campusLocation || '', tradeMethod: item.tradeMethod || '面交' });
   const [saving, setSaving] = useState(false);
@@ -78,11 +94,12 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
     if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
   };
 
-  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setEditImageFile(file);
-    setEditPreviewUrl(URL.createObjectURL(file));
+    const compressed = await compressImage(file);
+    setEditImageFile(compressed);
+    setEditPreviewUrl(URL.createObjectURL(compressed));
   };
 
   const removeEditImage = () => {
@@ -139,6 +156,52 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
   const handleDelete = () => {
     if (window.confirm('确定要删除此商品吗？')) {
       if (onDelete) onDelete(item.id);
+    }
+  };
+
+  const handleReserve = async () => {
+    setReserving(true);
+    setReserveError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ itemId: item.id }),
+      });
+      if (res.ok) {
+        if (onStatusChange) onStatusChange(item.id, 'RESERVED');
+      } else {
+        const data = await res.json();
+        setReserveError(data.error || '预约失败');
+      }
+    } catch {
+      setReserveError('网络错误，请稍后重试');
+    } finally {
+      setReserving(false);
+    }
+  };
+
+  const handleCancelReservation = async () => {
+    if (!window.confirm('确定要取消此预约？')) return;
+    setCancelReserving(true);
+    setReserveError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/reservations/${item.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        if (onStatusChange) onStatusChange(item.id, 'ACTIVE');
+      } else {
+        const data = await res.json();
+        setReserveError(data.error || '操作失败');
+      }
+    } catch {
+      setReserveError('网络错误，请稍后重试');
+    } finally {
+      setCancelReserving(false);
     }
   };
 
@@ -237,7 +300,6 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
               )}
               <div>
                 <p className="font-medium text-gray-900">{item.seller.name}</p>
-                <p className="text-xs text-gray-400">学号: {item.seller.studentId}</p>
               </div>
             </div>
             <div className="mt-3 space-y-1.5 text-sm">
@@ -255,7 +317,7 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
-                  <span>{item.seller.phone}</span>
+                  <span>{currentUserId ? item.seller.phone : '登录后查看'}</span>
                 </div>
               )}
               {item.seller.email && (
@@ -263,10 +325,90 @@ export function ItemDetail({ item, isOpen, onClose, currentUserId, onFavorite, i
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span>{item.seller.email}</span>
+                  <span>{currentUserId ? item.seller.email : '登录后查看'}</span>
                 </div>
               )}
             </div>
+
+            {/* 预约按钮（非本人、已登录、商品在售） */}
+            {!isOwner && currentUserId && item.status === 'ACTIVE' && (
+              <div>
+                {reserveError && (
+                  <p className="text-xs text-red-500 mb-2">{reserveError}</p>
+                )}
+                <button
+                  onClick={handleReserve}
+                  disabled={reserving}
+                  className="w-full py-2.5 rounded-lg text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:bg-amber-300 transition-colors"
+                >
+                  {reserving ? '预约中...' : '预约'}
+                </button>
+              </div>
+            )}
+
+            {/* 已预约 — 买方信息（卖方可见） */}
+            {isReserved && isOwner && item.reservation && (
+              <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-sm font-medium text-amber-700 mb-2">已被预约</p>
+                <div className="space-y-1 text-sm">
+                  <p className="text-gray-700">
+                    <span className="text-gray-400">预约人：</span>
+                    {item.reservation.buyer.name}
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="text-gray-400">学号：</span>
+                    {item.reservation.buyer.studentId}
+                  </p>
+                  {item.reservation.buyer.phone && (
+                    <p className="text-gray-700">
+                      <span className="text-gray-400">手机：</span>
+                      {item.reservation.buyer.phone}
+                    </p>
+                  )}
+                  {item.reservation.buyer.dormitory && (
+                    <p className="text-gray-700">
+                      <span className="text-gray-400">宿舍：</span>
+                      {item.reservation.buyer.dormitory}
+                    </p>
+                  )}
+                  {item.reservation.buyer.email && (
+                    <p className="text-gray-700">
+                      <span className="text-gray-400">邮箱：</span>
+                      {item.reservation.buyer.email}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={handleCancelReservation}
+                  disabled={cancelReserving}
+                  className="mt-2 text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+                >
+                  {cancelReserving ? '取消中...' : '取消预约'}
+                </button>
+              </div>
+            )}
+
+            {/* 已预约 — 买方本人看到 */}
+            {isReserved && isBuyer && (
+              <div className="mt-3 p-3 bg-green-50 rounded-xl border border-green-200">
+                <p className="text-sm font-medium text-green-700 mb-1">你已成功预约此商品</p>
+                <p className="text-xs text-green-600">等待卖家与你联系</p>
+                <button
+                  onClick={handleCancelReservation}
+                  disabled={cancelReserving}
+                  className="mt-2 text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+                >
+                  {cancelReserving ? '取消中...' : '取消预约'}
+                </button>
+              </div>
+            )}
+
+            {/* 已预约 — 第三方看到 */}
+            {isReserved && !isOwner && !isBuyer && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-sm text-gray-500 text-center">该商品已被预约</p>
+              </div>
+            )}
 
             {/* 管理按钮（本人） */}
             {isOwner && (

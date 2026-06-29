@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!item) {
       return NextResponse.json({ error: '商品不存在' }, { status: 404 });
     }
-    if (item.status !== 'ACTIVE') {
+    if (item.status !== 'ACTIVE' && item.status !== 'RESERVED') {
       return NextResponse.json({ error: '该商品已下架或已售出' }, { status: 400 });
     }
 

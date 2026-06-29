@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/guard';
+import { saveImage, validateImage } from '@/lib/image';
 
 export async function GET(
   _request: NextRequest,
@@ -19,6 +20,11 @@ export async function GET(
       include: {
         seller: {
           select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true },
+        },
+        reservation: {
+          include: {
+            buyer: { select: { id: true, studentId: true, name: true, email: true, dormitory: true, phone: true } },
+          },
         },
       },
     });
@@ -75,6 +81,8 @@ export async function PATCH(
       // Handle new image upload
       const newImageFile = formData.get('image') as File | null;
       if (newImageFile && newImageFile.size > 0) {
+        const err = validateImage(newImageFile);
+        if (err) return NextResponse.json({ error: err }, { status: 400 });
         if (item.images) {
           const oldFilePath = path.join(process.cwd(), 'public', item.images);
           if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
@@ -98,7 +106,8 @@ export async function PATCH(
     // Validate status transitions (non-admin users)
     if (updates.status && auth.user.role !== 'ADMIN') {
       const validTransitions: Record<string, string[]> = {
-        ACTIVE: ['SOLD', 'OFFLINE'],
+        ACTIVE: ['RESERVED', 'SOLD', 'OFFLINE'],
+        RESERVED: ['ACTIVE', 'SOLD'],
         OFFLINE: ['ACTIVE'],
         SOLD: [],
       };
@@ -109,6 +118,16 @@ export async function PATCH(
     }
 
     if (Object.keys(updates).length > 0) {
+      // If status changes away from RESERVED, delete reservation atomically
+      if (item.status === 'RESERVED' && updates.status && updates.status !== 'RESERVED') {
+        await prisma.$transaction([
+          prisma.reservation.deleteMany({ where: { itemId: id } }),
+          prisma.item.update({ where: { id }, data: updates, include: { seller: { select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true } } } }),
+        ]);
+        const refreshed = await prisma.item.findUnique({ where: { id }, include: { seller: { select: { id: true, studentId: true, name: true, avatar: true, email: true, dormitory: true, phone: true } } } });
+        return NextResponse.json(refreshed);
+      }
+
       const updatedItem = await prisma.item.update({
         where: { id },
         data: updates,
@@ -162,18 +181,3 @@ export async function DELETE(
   }
 }
 
-function saveImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    const ext = path.extname(file.name) || '.jpg';
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-    const filePath = path.join(uploadsDir, filename);
-    file.arrayBuffer().then((buffer) => {
-      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
-        if (err) return reject(err);
-        resolve(`/uploads/${filename}`);
-      });
-    }).catch(reject);
-  });
-}

@@ -38,8 +38,10 @@ export default function ProfilePage() {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [myItems, setMyItems] = useState<Item[]>([]);
   const [favorites, setFavorites] = useState<Item[]>([]);
-  const [activeTab, setActiveTab] = useState<'items' | 'favorites'>('items');
+  const [activeTab, setActiveTab] = useState<'items' | 'favorites' | 'reservations'>('items');
   const [loading, setLoading] = useState(false);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [reservationRole, setReservationRole] = useState<'buyer' | 'seller'>('buyer');
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<Item | null>(null);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -80,6 +82,37 @@ export default function ProfilePage() {
     fetchMyItems();
   }, [isLoggedIn]);
 
+  // Prefetch all counts on login
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const token = localStorage.getItem('token');
+
+    const fetchFavorites = async () => {
+      try {
+        const res = await fetch('/api/favorites', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        setFavorites(data);
+      } catch { setFavorites([]); }
+    };
+
+    const fetchReservations = async () => {
+      try {
+        const res = await fetch('/api/reservations?role=buyer', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        setReservations(data);
+      } catch { setReservations([]); }
+    };
+
+    fetchFavorites();
+    fetchReservations();
+  }, [isLoggedIn]);
+
+  // Refresh favorites when tab switches
   useEffect(() => {
     if (!isLoggedIn || activeTab !== 'favorites') return;
 
@@ -101,6 +134,29 @@ export default function ProfilePage() {
 
     fetchFavorites();
   }, [isLoggedIn, activeTab]);
+
+  // Refresh reservations when tab switches
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'reservations') return;
+
+    const fetchReservations = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/reservations?role=${reservationRole}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        setReservations(data);
+      } catch {
+        setReservations([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReservations();
+  }, [isLoggedIn, activeTab, reservationRole]);
 
   const handleItemSelect = async (id: number) => {
     setSelectedItemId(id);
@@ -178,6 +234,14 @@ export default function ProfilePage() {
         >
           我的收藏 ({favorites.length})
         </button>
+        <button
+          onClick={() => setActiveTab('reservations')}
+          className={`pb-2 px-4 font-medium transition-colors ${
+            activeTab === 'reservations' ? 'border-b-2 border-primary-500 text-primary-600' : 'text-gray-500'
+          }`}
+        >
+          预约记录 ({reservations.length})
+        </button>
       </div>
 
       {activeTab === 'items' && (
@@ -210,6 +274,78 @@ export default function ProfilePage() {
             </div>
           ) : (
             <ItemGrid items={favorites} onItemSelect={handleItemSelect} />
+          )}
+        </>
+      )}
+
+      {activeTab === 'reservations' && (
+        <>
+          <div className="flex gap-3 mb-4">
+            <button
+              onClick={() => setReservationRole('buyer')}
+              className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                reservationRole === 'buyer' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              我预约的
+            </button>
+            <button
+              onClick={() => setReservationRole('seller')}
+              className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                reservationRole === 'seller' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              预约我的
+            </button>
+          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+            </div>
+          ) : reservations.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <p className="text-lg">暂无预约记录</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reservations.map((r: any) => (
+                <div key={r.id} className="bg-white rounded-xl border p-4 flex items-center gap-4">
+                  {r.item?.images ? (
+                    <img src={r.item.images} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+                  ) : (
+                    <div className="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{r.item?.title || '商品已删除'}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">¥{r.item?.price}</p>
+                    {reservationRole === 'seller' && r.buyer ? (
+                      <div className="mt-1 text-xs text-gray-500">
+                        <span className="text-amber-600 font-medium">预约人：</span>
+                        {r.buyer.name}（{r.buyer.studentId}）
+                        {r.buyer.phone && <span className="ml-2">{r.buyer.phone}</span>}
+                      </div>
+                    ) : reservationRole === 'buyer' && (
+                      <p className="mt-1 text-xs text-green-600">
+                        已预约 · {new Date(r.createdAt).toLocaleDateString('zh-CN')}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem('token');
+                      await fetch(`/api/reservations/${r.itemId}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      setReservations((prev) => prev.filter((x) => x.id !== r.id));
+                    }}
+                    className="text-xs text-red-400 hover:text-red-600 font-medium flex-shrink-0 transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </>
       )}

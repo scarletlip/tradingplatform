@@ -66,10 +66,18 @@ export function ItemCard({ item, onClick, onFavorite, isFavorite }: ItemCardProp
             已下架
           </span>
         );
+      case 'RESERVED':
+        return (
+          <span className="absolute top-2 left-2 bg-amber-400/90 text-white text-xs px-2 py-0.5 rounded-lg">
+            已预约
+          </span>
+        );
       default:
         return null;
     }
   };
+
+  const isReserved = item.status === 'RESERVED';
 
   return (
     <div
@@ -77,7 +85,7 @@ export function ItemCard({ item, onClick, onFavorite, isFavorite }: ItemCardProp
       onClick={() => onClick(item.id)}
     >
       {/* Card */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-gray-100/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300">
+      <div className={`bg-white rounded-2xl overflow-hidden border border-gray-100/80 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 ${isReserved ? 'opacity-70' : ''}`}>
         {/* Image area */}
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
           {imageUrl ? (

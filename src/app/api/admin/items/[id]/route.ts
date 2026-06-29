@@ -26,6 +26,9 @@ export async function PATCH(
       return NextResponse.json({ error: '无效的状态' }, { status: 400 });
     }
 
+    // Clean up reservation if changing away from RESERVED
+    await prisma.reservation.deleteMany({ where: { itemId } });
+
     const item = await prisma.item.update({
       where: { id: itemId },
       data: { status },

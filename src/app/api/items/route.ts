@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import prisma from '@/lib/db';
 import { requireAuth } from '@/lib/guard';
+import { saveImage, validateImage } from '@/lib/image';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +12,12 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '12');
 
-    const where: Record<string, unknown> = { status: 'ACTIVE' };
+    const where: Record<string, unknown> = {};
+    if (sellerId) {
+      where.sellerId = parseInt(sellerId);
+    } else {
+      where.status = { in: ['ACTIVE', 'RESERVED'] };
+    }
     if (category && category !== '全部') where.category = category;
     if (search) {
       where.OR = [
@@ -70,13 +74,8 @@ export async function POST(request: NextRequest) {
 
     let imagesUrl: string | null = null;
     if (imageFile && imageFile.size > 0) {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!allowedTypes.includes(imageFile.type)) {
-        return NextResponse.json({ error: '只支持 JPG/PNG/WebP/GIF 格式' }, { status: 400 });
-      }
-      if (imageFile.size > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: '图片大小不能超过 5MB' }, { status: 400 });
-      }
+      const err = validateImage(imageFile);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
       imagesUrl = await saveImage(imageFile);
     }
 
@@ -108,18 +107,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function saveImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    const ext = path.extname(file.name) || '.jpg';
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-    const filePath = path.join(uploadsDir, filename);
-    file.arrayBuffer().then((buffer) => {
-      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
-        if (err) return reject(err);
-        resolve(`/uploads/${filename}`);
-      });
-    }).catch(reject);
-  });
-}
